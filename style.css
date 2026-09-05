@@ -167,15 +167,51 @@ body {
 }
 .bonus-affects-label input { margin-top: 3px; accent-color: #FFD700; }
 
-.qa-multiplier-preview {
-    font-size: 0.78em;
+/* شرائح المراحل وقت إنشاء بونس جديد */
+.stage-chip-list { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0; min-height: 20px; }
+.stage-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background: rgba(255,215,0,0.1);
+    border: 1px solid rgba(255,215,0,0.3);
     color: #FFD700;
-    background: rgba(255,215,0,0.08);
-    border: 1px solid rgba(255,215,0,0.25);
-    border-radius: 8px;
-    padding: 7px 10px;
-    margin-top: 8px;
+    border-radius: 20px;
+    padding: 4px 6px 4px 12px;
+    font-size: 0.78em;
 }
+.stage-chip-remove { background: none; border: none; color: #ff8888; cursor: pointer; font-size: 0.95em; padding: 2px 4px; }
+.stage-remove-btn { background: none; border: none; color: #ff8888; cursor: pointer; font-size: 0.9em; padding: 2px 8px; flex-shrink: 0; }
+
+/* محرر مراحل بونس موجود أصلاً (داخل بطاقته بالإعدادات) */
+.stage-editor { margin-top: 12px; border-top: 1px solid rgba(255,255,255,0.08); padding-top: 10px; }
+.stage-editor summary { cursor: pointer; color: #aaa; font-size: 0.8em; list-style: none; user-select: none; }
+.stage-editor summary::-webkit-details-marker { display: none; }
+.stage-editor summary::before { content: '▶  '; font-size: 0.75em; opacity: 0.7; }
+.stage-editor details[open] summary::before { content: '▼  '; font-size: 0.75em; opacity: 0.7; }
+.stage-edit-list { display: flex; flex-direction: column; gap: 5px; margin-top: 8px; }
+.stage-edit-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    background: rgba(255,255,255,0.04);
+    border-radius: 6px;
+    padding: 5px 10px;
+    font-size: 0.8em;
+    color: #ddd;
+}
+.stage-add-input {
+    flex: 1;
+    background: rgba(255,255,255,0.07);
+    border: 1px solid rgba(255,255,255,0.14);
+    border-radius: 8px;
+    padding: 8px 10px;
+    color: #eee;
+    font-family: inherit;
+    font-size: 0.85em;
+}
+.stage-add-input:focus { outline: none; border-color: #FFD700; }
+
 .bonus-list { display: flex; flex-direction: column; gap: 10px; }
 
 .bonus-card {
@@ -280,15 +316,46 @@ body {
 }
 .bonus-ro-list { display: flex; flex-direction: column; gap: 12px; }
 .bonus-ro-item {
+    position: relative;
+    display: flex;
+    align-items: stretch;
+    gap: 8px;
     border-radius: 10px;
-    padding: 10px 12px;
+    padding: 4px;
     background: rgba(255,255,255,0.03);
     border: 1px solid color-mix(in srgb, var(--bonus-color) 35%, transparent);
     box-shadow: 0 0 var(--bonus-glow, 0px) color-mix(in srgb, var(--bonus-color) 45%, transparent);
     transition: box-shadow 0.4s ease, border-color 0.4s ease;
 }
 .bonus-ro-item.bonus-maxed { animation: bonusMaxPulse 2.4s ease-in-out infinite; }
+.bonus-ro-tap {
+    flex: 1;
+    text-align: right;
+    background: none;
+    border: none;
+    padding: 8px;
+    cursor: pointer;
+    font-family: inherit;
+    border-radius: 8px;
+    transition: background 0.15s ease;
+}
+.bonus-ro-tap:hover:not(:disabled) { background: rgba(255,255,255,0.05); }
+.bonus-ro-tap:active:not(:disabled) { background: rgba(255,255,255,0.09); }
+.bonus-ro-tap:disabled { cursor: default; }
 .bonus-ro-name { font-weight: bold; font-size: 0.88em; margin-bottom: 8px; }
+.bonus-ro-undo {
+    flex-shrink: 0;
+    align-self: center;
+    background: rgba(255,255,255,0.05);
+    border: 1px solid rgba(255,255,255,0.14);
+    color: #999;
+    border-radius: 50%;
+    width: 32px;
+    height: 32px;
+    font-size: 1em;
+    cursor: pointer;
+    margin-left: 4px;
+}
 
 /* ---------- الزر البعيد اللي يفتح الإعدادات ---------- */
 .settings-trigger {

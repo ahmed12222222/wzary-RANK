@@ -180,20 +180,31 @@ function buildBonusSparks(count, color) {
     return out;
 }
 
-// صف مربعات ملتصقة، وحد لكل مرحلة — يلبس لمن توصله (|1.1|1.2|1.3|...)
-function buildBonusPips(currentStage, totalStages, color) {
+// صف مربعات ملتصقة، وحد لكل مرحلة — يلبس لمن توصله. العنوان جوا كل مربع هو اللي المستخدم كتبه بنفسه
+function buildBonusPips(currentStage, stages, color) {
     let out = '';
-    for (let i = 1; i <= totalStages; i++) {
-        const filled = i <= currentStage;
-        const isCurrent = i === currentStage && currentStage > 0;
-        out += `<span class="bonus-pip${filled ? ' filled' : ''}${isCurrent ? ' current' : ''}"${filled ? ` style="--pip-color:${color};"` : ''}>1.${i}</span>`;
-    }
+    stages.forEach((label, idx) => {
+        const stageNum = idx + 1;
+        const filled = stageNum <= currentStage;
+        const isCurrent = stageNum === currentStage && currentStage > 0;
+        out += `<span class="bonus-pip${filled ? ' filled' : ''}${isCurrent ? ' current' : ''}"${filled ? ` style="--pip-color:${color};"` : ''}>${escapeHtml(String(label))}</span>`;
+    });
     return out;
 }
 
 // ============================================================
 // ① طبقة البيانات (localStorage بدل Dataview)
 // ============================================================
+
+// يهاجر بونس محفوظ بالشكل القديم (totalStages رقم) للشكل الجديد (stages نصوص) — دفاعي بس، ما يأثر إذا البيانات أصلاً جديدة
+function migrateBonus(b) {
+    if (Array.isArray(b.stages)) return b;
+    const count = Math.max(1, Math.round(Number(b.totalStages) || 1));
+    return {
+        ...b,
+        stages: Array.from({ length: count }, (_, i) => `1.${i + 1}`),
+    };
+}
 
 function loadData() {
     if (typeof localStorage === 'undefined') return { entries: [], restDays: [], bonuses: [], rankThresholds: null, monthRankThresholds: null };
@@ -204,7 +215,7 @@ function loadData() {
         return {
             entries: Array.isArray(parsed.entries) ? parsed.entries : [],
             restDays: Array.isArray(parsed.restDays) ? parsed.restDays : [],
-            bonuses: Array.isArray(parsed.bonuses) ? parsed.bonuses : [],
+            bonuses: (Array.isArray(parsed.bonuses) ? parsed.bonuses : []).map(migrateBonus),
             rankThresholds: Array.isArray(parsed.rankThresholds) ? parsed.rankThresholds : null,
             monthRankThresholds: Array.isArray(parsed.monthRankThresholds) ? parsed.monthRankThresholds : null,
         };
@@ -248,12 +259,19 @@ function computeState(appData, now) {
         }
     }
 
+    // مضاعف نقاط اليوم (شوف getActiveMultiplier) — يتحسب من appData الممرر لنفس الدالة، مو من appData العام،
+    // عشان computeState يضل قابل للاختبار بمعزل. يطبّق حياً على نقاط اليوم بس، وما يلمس تاريخ الأيام الماضية إطلاقاً.
+    const activeMultiplier = getActiveMultiplier(appData);
+
     for (const e of appData.entries) {
-        const points = Number(e.points) || 0;
-        if (!points) continue;
+        const rawPoints = Number(e.points) || 0;
+        if (!rawPoints) continue;
 
         const taskDate = moment(e.date);
         if (!taskDate.isValid()) continue;
+
+        const isToday = taskDate.isSame(now, 'day');
+        const points = isToday ? rawPoints * activeMultiplier : rawPoints;
 
         if (e.subject) {
             const s = String(e.subject).trim();
@@ -350,7 +368,7 @@ function computeState(appData, now) {
         dailyAvg, projectedWeek, weekDiff, weekPct, dayPct, monthPct,
         isLateEmpty, maxSubPts,
         isTheMachine, rank, rankIdx, nextRankInfo, ptsToNext,
-        currentMonthKey,
+        currentMonthKey, activeMultiplier,
     };
 }
 
@@ -364,7 +382,7 @@ function buildDashboardHtml(state) {
         subjectMap, weeklyData, monthlyData, missedPointsTarget, dynamicDailyTarget,
         streak, bestDay, bestPts, weekBars, maxBarPts, dailyAvg, projectedWeek,
         weekDiff, weekPct, dayPct, monthPct, isLateEmpty, maxSubPts,
-        isTheMachine, rank, rankIdx, nextRankInfo, ptsToNext, currentMonthKey,
+        isTheMachine, rank, rankIdx, nextRankInfo, ptsToNext, currentMonthKey, activeMultiplier,
     } = state;
 
     const visualTierResult = getVisualTier(rankIdx, isTheMachine);
@@ -421,6 +439,10 @@ function buildDashboardHtml(state) {
 
     const debtWarning = missedPointsTarget > 0
         ? `<span style="font-size:0.75em; color:#ff4444; margin-right:8px;">(تسخيت الأيام السابقة: +${missedPointsTarget} نقطة كدين)</span>`
+        : '';
+
+    const multiplierBadge = activeMultiplier > 1
+        ? `<span style="font-size:0.75em; color:#FFD700; margin-right:8px;">⚡ بونس نشط ×${activeMultiplier}</span>`
         : '';
 
     const barChart = weekBars.map(b => {
@@ -507,7 +529,7 @@ function buildDashboardHtml(state) {
   </div>
 
   <div class="sec">
-    <div class="prow"><span>⚡ اليوم: ${Math.floor(dayTotal)} / ${dynamicDailyTarget} ${debtWarning}</span><span style="color:${pColor(dayPct)};font-weight:bold;">${dayPct.toFixed(1)}%</span></div>
+    <div class="prow"><span>⚡ اليوم: ${Math.floor(dayTotal)} / ${dynamicDailyTarget} ${debtWarning}${multiplierBadge}</span><span style="color:${pColor(dayPct)};font-weight:bold;">${dayPct.toFixed(1)}%</span></div>
     <div class="trk"><div style="height:100%;width:${dayPct}%;background:linear-gradient(90deg,#00B4DB,#0083B0);border-radius:20px;"></div></div>
 
     <div class="prow"><span>🏆 الأسبوع: ${Math.floor(weekTotal)} / ${MAX_WEEK}</span><span style="color:${pColor(weekPct)};font-weight:bold;">${weekPct.toFixed(1)}%</span></div>
@@ -585,19 +607,24 @@ function deleteRestDay(id) {
     refreshAll();
 }
 
-// ----- البونسات: كل بونس اسمه ومراحله تنسوي بكيف المستخدم، والترقية خطوة-خطوة مو تجميع -----
-// affectsPoints: إذا true، هذا البونس يدخل بحساب مضاعف نقاط اليوم (شوف getActiveMultiplier)
-function createBonus(name, totalStages, affectsPoints) {
+// ----- البونسات: كل بونس اسمه ومراحله (بعناوينها) تنسوي بكيف المستخدم بالكامل، والترقية خطوة-خطوة مو تجميع -----
+// stages: مصفوفة نصوص، كل وحدة عنوان مرحلة يكتبه المستخدم بنفسه (مثلاً '1.1', '1.5', 'نهائي' — أي نص).
+// affectsPoints: إذا true، هذا البونس يدخل بحساب مضاعف نقاط اليوم (شوف getActiveMultiplier)، ويرجع يتصفر تلقائياً كل يوم جديد.
+function createBonus(name, stages, affectsPoints) {
     const trimmedName = String(name || '').trim();
-    const stages = Math.max(1, Math.round(Number(totalStages) || 0));
-    if (!trimmedName) return false;
-    appData.bonuses.push({
+    const cleanStages = (Array.isArray(stages) ? stages : [])
+        .map(s => String(s || '').trim())
+        .filter(Boolean);
+    if (!trimmedName || cleanStages.length === 0) return false;
+    const bonus = {
         id: uid('bo'),
         name: trimmedName,
-        totalStages: stages,
+        stages: cleanStages,
         currentStage: 0,
         affectsPoints: !!affectsPoints,
-    });
+    };
+    if (bonus.affectsPoints) bonus.lastActiveDay = moment().format('YYYY-MM-DD');
+    appData.bonuses.push(bonus);
     saveData(appData);
     refreshAll();
     return true;
@@ -606,7 +633,8 @@ function createBonus(name, totalStages, affectsPoints) {
 function levelUpBonus(id) {
     const b = appData.bonuses.find(x => x.id === id);
     if (!b) return;
-    if (b.currentStage < b.totalStages) b.currentStage++;
+    if (b.currentStage < b.stages.length) b.currentStage++;
+    if (b.affectsPoints) b.lastActiveDay = moment().format('YYYY-MM-DD');
     saveData(appData);
     refreshAll();
 }
@@ -615,14 +643,50 @@ function levelDownBonus(id) {
     const b = appData.bonuses.find(x => x.id === id);
     if (!b) return;
     if (b.currentStage > 0) b.currentStage--;
+    if (b.affectsPoints) b.lastActiveDay = moment().format('YYYY-MM-DD');
     saveData(appData);
     refreshAll();
 }
 
+function addStageToBonus(id, label) {
+    const b = appData.bonuses.find(x => x.id === id);
+    const clean = String(label || '').trim();
+    if (!b || !clean) return false;
+    b.stages.push(clean);
+    saveData(appData);
+    refreshAll();
+    return true;
+}
+
+function removeStageFromBonus(id, stageIdx) {
+    const b = appData.bonuses.find(x => x.id === id);
+    if (!b || stageIdx < 0 || stageIdx >= b.stages.length) return;
+    b.stages.splice(stageIdx, 1);
+    b.currentStage = Math.min(b.currentStage, b.stages.length);
+    saveData(appData);
+    refreshAll();
+}
+
+// يرجّع بونسات "تأثر بالنقاط" لصفر تلقائياً أول ما ينفتح الموقع بيوم جديد — عشان تنكسب من جديد كل يوم
+function checkDailyBonusReset() {
+    const today = moment().format('YYYY-MM-DD');
+    let changed = false;
+    (appData.bonuses || []).forEach(b => {
+        if (!b.affectsPoints) return;
+        if (b.lastActiveDay !== today) {
+            if (b.currentStage !== 0) changed = true;
+            b.currentStage = 0;
+            b.lastActiveDay = today;
+        }
+    });
+    if (changed) saveData(appData);
+}
+
 // مضاعف نقاط اليوم: لكل بونس مفعّل عليه "يأثر بالنقاط"، يضيف (مرحلته الحالية + 1) كعامل ضرب،
 // وكل هذي العوامل تنضرب مع بعض. بونس ما وصل أي مرحلة يعطي ×1 (بدون تأثير). القيمة الافتراضية (بدون أي بونس مفعّل) = ×1.
-function getActiveMultiplier() {
-    const scoring = (appData.bonuses || []).filter(b => b.affectsPoints);
+function getActiveMultiplier(data) {
+    const src = data || appData;
+    const scoring = (src.bonuses || []).filter(b => b.affectsPoints);
     if (scoring.length === 0) return 1;
     return scoring.reduce((mult, b) => mult * (b.currentStage + 1), 1);
 }
@@ -661,7 +725,7 @@ function importDataFromFile(file) {
             appData = {
                 entries: Array.isArray(parsed.entries) ? parsed.entries : [],
                 restDays: Array.isArray(parsed.restDays) ? parsed.restDays : [],
-                bonuses: Array.isArray(parsed.bonuses) ? parsed.bonuses : [],
+                bonuses: (Array.isArray(parsed.bonuses) ? parsed.bonuses : []).map(migrateBonus),
                 rankThresholds: Array.isArray(parsed.rankThresholds) ? parsed.rankThresholds : null,
                 monthRankThresholds: Array.isArray(parsed.monthRankThresholds) ? parsed.monthRankThresholds : null,
             };
@@ -747,27 +811,42 @@ function renderBonuses() {
     }
 
     listEl.innerHTML = appData.bonuses.map(b => {
-        const ratio    = b.totalStages > 0 ? b.currentStage / b.totalStages : 0;
+        const total    = b.stages.length;
+        const ratio    = total > 0 ? b.currentStage / total : 0;
         const color    = bonusColorForRatio(ratio);
         const glow     = (2 + ratio * 16).toFixed(1);
         const pulseDur = (3 - ratio * 1.6).toFixed(2);
         const sparks   = Math.round(ratio * 7);
-        const isMaxed  = b.totalStages > 0 && b.currentStage >= b.totalStages;
+        const isMaxed  = total > 0 && b.currentStage >= total;
+
+        const stageEditRows = b.stages.map((label, idx) => `
+            <div class="stage-edit-row">
+                <span>${escapeHtml(label)}</span>
+                <button type="button" class="stage-remove-btn" data-id="${b.id}" data-idx="${idx}" title="حذف هذي المرحلة">✕</button>
+            </div>`).join('');
 
         return `<div class="bonus-card ${isMaxed ? 'bonus-maxed' : ''}" style="--bonus-color:${color};--bonus-glow:${glow}px;--bonus-pulse-dur:${pulseDur}s;">
             <div class="bonus-sparks">${buildBonusSparks(sparks, color)}</div>
             <div class="bonus-card-inner">
                 ${isMaxed ? `<div class="bonus-complete-badge">🎉 مكتمل</div>` : ''}
-                <div class="bonus-name">${escapeHtml(b.name)} ${b.affectsPoints ? `<span class="bonus-mult-badge" title="يأثر بنقاط اليوم">⚡×${b.currentStage + 1}</span>` : ''}</div>
-                <div class="bonus-stage-label">المرحلة <bdi dir="ltr">${b.currentStage}</bdi> من <bdi dir="ltr">${b.totalStages}</bdi></div>
-                <div class="bonus-pip-row">${buildBonusPips(b.currentStage, b.totalStages, color)}</div>
+                <div class="bonus-name">${escapeHtml(b.name)} ${b.affectsPoints ? `<span class="bonus-mult-badge" title="يأثر بنقاط اليوم، يتصفر كل يوم">⚡×${b.currentStage + 1}</span>` : ''}</div>
+                <div class="bonus-stage-label">المرحلة <bdi dir="ltr">${b.currentStage}</bdi> من <bdi dir="ltr">${total}</bdi></div>
+                <div class="bonus-pip-row">${buildBonusPips(b.currentStage, b.stages, color)}</div>
                 <div class="bonus-controls">
                     <div class="bonus-stepper">
                         <button type="button" class="bonus-btn bonus-down" data-id="${b.id}" aria-label="تنزيل مرحلة" title="تنزيل مرحلة" ${b.currentStage<=0?'disabled':''}>−</button>
-                        <button type="button" class="bonus-btn bonus-up" data-id="${b.id}" aria-label="ترقية مرحلة" title="ترقية مرحلة" ${b.currentStage>=b.totalStages?'disabled':''}>+</button>
+                        <button type="button" class="bonus-btn bonus-up" data-id="${b.id}" aria-label="ترقية مرحلة" title="ترقية مرحلة" ${b.currentStage>=total?'disabled':''}>+</button>
                     </div>
-                    <button type="button" class="bonus-del" data-id="${b.id}" aria-label="حذف البونس" title="حذف البونس">✕</button>
+                    <button type="button" class="bonus-del" data-id="${b.id}" aria-label="حذف البونس" title="حذف البونس">✕ حذف البونس</button>
                 </div>
+                <details class="stage-editor">
+                    <summary>✏️ تعديل المراحل</summary>
+                    <div class="stage-edit-list">${stageEditRows || '<span class="form-hint">ما بقت مراحل — ضيف وحدة أقل.</span>'}</div>
+                    <div class="qa-row" style="margin-top:8px;">
+                        <input type="text" class="stage-add-input" placeholder="عنوان مرحلة جديدة، مثلاً 1.5">
+                        <button type="button" class="qa-btn qa-btn-secondary stage-add-btn" data-id="${b.id}">➕ إضافة</button>
+                    </div>
+                </details>
             </div>
         </div>`;
     }).join('');
@@ -777,9 +856,17 @@ function renderBonuses() {
     listEl.querySelectorAll('.bonus-del').forEach(btn => btn.addEventListener('click', () => {
         if (typeof confirm === 'undefined' || confirm('حذف هذا البونس؟')) deleteBonus(btn.dataset.id);
     }));
+    listEl.querySelectorAll('.stage-remove-btn').forEach(btn => btn.addEventListener('click', () => {
+        removeStageFromBonus(btn.dataset.id, Number(btn.dataset.idx));
+    }));
+    listEl.querySelectorAll('.stage-add-btn').forEach(btn => btn.addEventListener('click', () => {
+        const input = btn.parentElement.querySelector('.stage-add-input');
+        if (input && addStageToBonus(btn.dataset.id, input.value)) input.value = '';
+    }));
 }
 
-// عرض بس-للقراءة يظهر بصفحة Focus Tracker الرئيسية — بلا أي أزرار تحكم، بنفس هوية الموقع الذهبية
+// عرض بصفحة Focus Tracker الرئيسية — تضغط على البونس نفسه يرقّيه مرحلة مباشرة (بدون فتح الإعدادات)،
+// وفيه زر تنزيل صغير للتراجع عن غلطة. التعديل الهيكلي (اسم/مراحل/حذف) يضل حصراً بالإعدادات.
 function renderReadonlyBonuses() {
     if (typeof document === 'undefined') return;
     const boxEl = document.getElementById('bonusReadonlyBox');
@@ -794,20 +881,31 @@ function renderReadonlyBonuses() {
 
     boxEl.innerHTML = `
     <div class="sec bonus-ro-sec">
-        <div style="font-size:0.78em;color:#888;margin-bottom:10px;font-weight:bold;">🏅 البونسات</div>
+        <div style="font-size:0.78em;color:#888;margin-bottom:10px;font-weight:bold;">🏅 البونسات — دوس عليه يرقّيه مرحلة</div>
         <div class="bonus-ro-list">
         ${appData.bonuses.map(b => {
-            const ratio   = b.totalStages > 0 ? b.currentStage / b.totalStages : 0;
+            const total   = b.stages.length;
+            const ratio   = total > 0 ? b.currentStage / total : 0;
             const color   = bonusColorForRatio(ratio);
             const glow    = (2 + ratio * 14).toFixed(1);
-            const isMaxed = b.totalStages > 0 && b.currentStage >= b.totalStages;
+            const isMaxed = total > 0 && b.currentStage >= total;
+            const canDown = b.currentStage > 0;
             return `<div class="bonus-ro-item ${isMaxed ? 'bonus-maxed' : ''}" style="--bonus-color:${color};--bonus-glow:${glow}px;">
-                <div class="bonus-ro-name" style="color:${color};">${escapeHtml(b.name)} ${isMaxed ? '🎉' : ''} ${b.affectsPoints ? `<span class="bonus-mult-badge" title="يأثر بنقاط اليوم">⚡×${b.currentStage + 1}</span>` : ''}</div>
-                <div class="bonus-pip-row">${buildBonusPips(b.currentStage, b.totalStages, color)}</div>
+                <button type="button" class="bonus-ro-tap" data-id="${b.id}" ${b.currentStage>=total?'disabled':''} aria-label="رقّي ${escapeHtml(b.name)} مرحلة">
+                    <div class="bonus-ro-name" style="color:${color};">${escapeHtml(b.name)} ${isMaxed ? '🎉' : ''} ${b.affectsPoints ? `<span class="bonus-mult-badge" title="يأثر بنقاط اليوم، يتصفر كل يوم">⚡×${b.currentStage + 1}</span>` : ''}</div>
+                    <div class="bonus-pip-row">${buildBonusPips(b.currentStage, b.stages, color)}</div>
+                </button>
+                ${canDown ? `<button type="button" class="bonus-ro-undo" data-id="${b.id}" title="تراجع مرحلة">↺</button>` : ''}
             </div>`;
         }).join('')}
         </div>
     </div>`;
+
+    boxEl.querySelectorAll('.bonus-ro-tap').forEach(btn => btn.addEventListener('click', () => levelUpBonus(btn.dataset.id)));
+    boxEl.querySelectorAll('.bonus-ro-undo').forEach(btn => btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        levelDownBonus(btn.dataset.id);
+    }));
 }
 
 // محرر عتبات الرتب — بس الأرقام (min) قابلة للتعديل، الأيقونة واللون والرسالة التحفيزية ثابتين دايماً
@@ -858,34 +956,13 @@ function resetRankThresholds() {
 }
 
 function refreshAll() {
+    checkDailyBonusReset();
     refreshSubjectDatalist();
     render();
     renderLog();
     renderBonuses();
     renderReadonlyBonuses();
     renderRankEditor();
-    updateMultiplierPreview();
-}
-
-function updateMultiplierPreview() {
-    if (typeof document === 'undefined') return;
-    const previewEl = document.getElementById('qaMultiplierPreview');
-    const dateEl = document.getElementById('qaDate');
-    const pointsEl = document.getElementById('qaPoints');
-    if (!previewEl || !dateEl) return;
-    const today = moment().format('YYYY-MM-DD');
-    const dateVal = dateEl.value;
-    const rawPoints = pointsEl ? (parseInt(pointsEl.value, 10) || 0) : 0;
-    const mult = getActiveMultiplier();
-    if (dateVal === today && mult > 1 && rawPoints > 0) {
-        previewEl.style.display = '';
-        previewEl.textContent = `⚡ بونس نشط ×${mult} — راح تنسجل ${rawPoints * mult} نقطة بدل ${rawPoints}`;
-    } else if (dateVal === today && mult > 1) {
-        previewEl.style.display = '';
-        previewEl.textContent = `⚡ عندك بونس نشط ×${mult} على نقاط اليوم`;
-    } else {
-        previewEl.style.display = 'none';
-    }
 }
 
 if (typeof document !== 'undefined') {
@@ -893,10 +970,6 @@ if (typeof document !== 'undefined') {
         const qaDate = document.getElementById('qaDate');
         const today = moment().format('YYYY-MM-DD');
         if (qaDate) { qaDate.value = today; qaDate.max = today; }
-
-        const qaPointsEl = document.getElementById('qaPoints');
-        if (qaPointsEl) qaPointsEl.addEventListener('input', updateMultiplierPreview);
-        if (qaDate) qaDate.addEventListener('change', updateMultiplierPreview);
 
         const entryForm = document.getElementById('entryForm');
         if (entryForm) {
@@ -906,13 +979,11 @@ if (typeof document !== 'undefined') {
                 const subjectVal = document.getElementById('qaSubject').value;
                 const dateVal = document.getElementById('qaDate').value;
                 if (!rawPoints || !dateVal) return;
-                // المضاعف يشتغل بس لمن التاريخ هو اليوم فعلاً — تعبئة تاريخ فات (backfill) توّدي بالنقاط الخام دايماً
-                const mult = (dateVal === moment().format('YYYY-MM-DD')) ? getActiveMultiplier() : 1;
-                addEntry(rawPoints * mult, subjectVal, dateVal);
+                // تنسجل دايماً بالقيمة الخام كما هي — المضاعف يطبّق حياً على نقاط اليوم بلوحة التحكم نفسها، مو هنا
+                addEntry(rawPoints, subjectVal, dateVal);
                 document.getElementById('qaPoints').value = '';
                 document.getElementById('qaSubject').value = '';
                 document.getElementById('qaPoints').focus();
-                updateMultiplierPreview();
             });
         }
 
@@ -966,11 +1037,44 @@ if (typeof document !== 'undefined') {
 
         const newBonusBtn = document.getElementById('newBonusBtn');
         const bonusNewForm = document.getElementById('bonusNewForm');
+        let pendingNewBonusStages = [];
+
+        function renderPendingStages() {
+            const el = document.getElementById('newBonusStagesList');
+            if (!el) return;
+            if (pendingNewBonusStages.length === 0) {
+                el.innerHTML = '<span class="form-hint">ضيف مرحلة وحدة على الأقل (اسمها براحتك، مثلاً 1.1 أو نهائي).</span>';
+                return;
+            }
+            el.innerHTML = pendingNewBonusStages.map((label, idx) =>
+                `<span class="stage-chip">${escapeHtml(label)}<button type="button" class="stage-chip-remove" data-idx="${idx}" aria-label="حذف">✕</button></span>`
+            ).join('');
+            el.querySelectorAll('.stage-chip-remove').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    pendingNewBonusStages.splice(Number(btn.dataset.idx), 1);
+                    renderPendingStages();
+                });
+            });
+        }
+
         if (newBonusBtn && bonusNewForm) {
             newBonusBtn.addEventListener('click', () => {
                 const showing = bonusNewForm.style.display !== 'none';
                 bonusNewForm.style.display = showing ? 'none' : 'block';
-                if (!showing) document.getElementById('bonusNameInput').focus();
+                if (!showing) { renderPendingStages(); document.getElementById('bonusNameInput').focus(); }
+            });
+        }
+
+        const addStageBtn = document.getElementById('addStageBtn');
+        if (addStageBtn) {
+            addStageBtn.addEventListener('click', () => {
+                const input = document.getElementById('newStageLabelInput');
+                const val = String(input.value || '').trim();
+                if (!val) { input.focus(); return; }
+                pendingNewBonusStages.push(val);
+                input.value = '';
+                input.focus();
+                renderPendingStages();
             });
         }
 
@@ -978,14 +1082,16 @@ if (typeof document !== 'undefined') {
         if (bonusCreateBtn) {
             bonusCreateBtn.addEventListener('click', () => {
                 const nameEl = document.getElementById('bonusNameInput');
-                const stagesEl = document.getElementById('bonusStagesInput');
                 const affectsEl = document.getElementById('bonusAffectsPoints');
-                const ok = createBonus(nameEl.value, stagesEl.value, affectsEl && affectsEl.checked);
+                const ok = createBonus(nameEl.value, pendingNewBonusStages, affectsEl && affectsEl.checked);
                 if (ok) {
                     nameEl.value = '';
-                    stagesEl.value = '5';
+                    pendingNewBonusStages = [];
+                    renderPendingStages();
                     if (affectsEl) affectsEl.checked = false;
                     bonusNewForm.style.display = 'none';
+                } else if (pendingNewBonusStages.length === 0) {
+                    document.getElementById('newStageLabelInput').focus();
                 } else {
                     nameEl.focus();
                 }
@@ -993,7 +1099,7 @@ if (typeof document !== 'undefined') {
         }
 
         refreshAll();
-        setInterval(render, 60000);
+        setInterval(refreshAll, 60000);
     });
 }
 
@@ -1004,6 +1110,7 @@ if (typeof module !== 'undefined' && module.exports) {
         getWeekRank, getMonthRank, MAX_DAY, MAX_WEEK, MAX_MONTH,
         bonusColorForRatio, lerpColorHex, hexToRgb, buildBonusPips,
         createBonus, levelUpBonus, levelDownBonus, deleteBonus, getActiveMultiplier,
+        addStageToBonus, removeStageFromBonus, checkDailyBonusReset,
         applyRankOverrides, getCurrentRanks: () => currentRanks, getCurrentMonthRanks: () => currentMonthRanks,
         getAppData: () => appData,
     };

@@ -55,7 +55,6 @@
               </div>
               <button type="submit" class="qa-btn qa-btn-primary" style="align-self:flex-end;">إضافة</button>
             </div>
-            <div id="qaMultiplierPreview" class="qa-multiplier-preview" style="display:none;"></div>
           </form>
           <button type="button" id="restDayBtn" class="qa-btn qa-btn-secondary qa-btn-full">☕ سجّل التاريخ فوك كيوم إجازة استراتيجية</button>
 
@@ -72,19 +71,19 @@
             <button type="button" id="newBonusBtn" class="qa-btn qa-btn-secondary">➕ بونس جديد</button>
           </div>
           <div class="bonus-new-form" id="bonusNewForm" style="display:none;">
-            <div class="qa-row">
-              <div class="qa-field qa-field-grow">
-                <label for="bonusNameInput">اسم البونس</label>
-                <input type="text" id="bonusNameInput" placeholder="مثلاً: حفظ القرآن" autocomplete="off">
-              </div>
-              <div class="qa-field" style="max-width:100px;">
-                <label for="bonusStagesInput">عدد المراحل</label>
-                <input type="number" id="bonusStagesInput" min="1" max="100" value="5">
-              </div>
+            <div class="qa-field" style="margin-bottom:10px;">
+              <label for="bonusNameInput">اسم البونس</label>
+              <input type="text" id="bonusNameInput" placeholder="مثلاً: حفظ القرآن" autocomplete="off">
             </div>
+            <label class="form-hint" style="display:block;margin-bottom:4px;">مراحل البونس — عنوان أي مرحلة براحتك تماماً</label>
+            <div class="qa-row">
+              <input type="text" id="newStageLabelInput" placeholder="مثلاً: 1.1" style="flex:1;">
+              <button type="button" id="addStageBtn" class="qa-btn qa-btn-secondary">➕ إضافة مرحلة</button>
+            </div>
+            <div id="newBonusStagesList" class="stage-chip-list"></div>
             <label class="bonus-affects-label">
               <input type="checkbox" id="bonusAffectsPoints">
-              <span>⚡ يضرب نقاط اليوم (كل مرحلة تضيفلك +1 بالمضاعف، يبدي ×1 وهو صفر)</span>
+              <span>⚡ يضرب نقاط اليوم (كل مرحلة تضيفلك +1 بالمضاعف، يتصفر تلقائياً كل يوم جديد)</span>
             </label>
             <button type="button" id="bonusCreateBtn" class="qa-btn qa-btn-primary qa-btn-full">إنشاء</button>
           </div>
