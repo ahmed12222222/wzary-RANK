@@ -682,13 +682,23 @@ function checkDailyBonusReset() {
     if (changed) saveData(appData);
 }
 
-// مضاعف نقاط اليوم: لكل بونس مفعّل عليه "يأثر بالنقاط"، يضيف (مرحلته الحالية + 1) كعامل ضرب،
-// وكل هذي العوامل تنضرب مع بعض. بونس ما وصل أي مرحلة يعطي ×1 (بدون تأثير). القيمة الافتراضية (بدون أي بونس مفعّل) = ×1.
+// مضاعف بونس وحد: الرقم يجيك من عنوان المرحلة الحالية نفسها اللي المستخدم كتبه (يعني هو يحدد الرقم بنفسه بالكامل).
+// ما وصل أي مرحلة بعد = بلا تأثير (×1). إذا عنوان المرحلة مو رقم صالح، برضو ×1 (بدل ما ينكسر الحساب).
+function bonusStageMultiplier(b) {
+    if (!b.affectsPoints || b.currentStage <= 0) return 1;
+    const label = b.stages[b.currentStage - 1];
+    const parsed = parseFloat(label);
+    if (!isFinite(parsed)) return 1;
+    return Math.round(parsed * 100) / 100; // نقربها لمنزلتين عشان ما تصير كسور عائمة غريبة
+}
+
+// مضاعف نقاط اليوم: كل بونس مفعّل عليه "يأثر بالنقاط" يساهم برقمه الحالي (bonusStageMultiplier)،
+// وكل هذي الأرقام تنضرب مع بعض. القيمة الافتراضية (بدون أي بونس مفعّل أو كلهن بالصفر) = ×1.
 function getActiveMultiplier(data) {
     const src = data || appData;
     const scoring = (src.bonuses || []).filter(b => b.affectsPoints);
     if (scoring.length === 0) return 1;
-    return scoring.reduce((mult, b) => mult * (b.currentStage + 1), 1);
+    return scoring.reduce((mult, b) => mult * bonusStageMultiplier(b), 1);
 }
 
 function deleteBonus(id) {
@@ -829,7 +839,7 @@ function renderBonuses() {
             <div class="bonus-sparks">${buildBonusSparks(sparks, color)}</div>
             <div class="bonus-card-inner">
                 ${isMaxed ? `<div class="bonus-complete-badge">🎉 مكتمل</div>` : ''}
-                <div class="bonus-name">${escapeHtml(b.name)} ${b.affectsPoints ? `<span class="bonus-mult-badge" title="يأثر بنقاط اليوم، يتصفر كل يوم">⚡×${b.currentStage + 1}</span>` : ''}</div>
+                <div class="bonus-name">${escapeHtml(b.name)} ${b.affectsPoints ? `<span class="bonus-mult-badge" title="يأثر بنقاط اليوم، يتصفر كل يوم">⚡×${bonusStageMultiplier(b)}</span>` : ''}</div>
                 <div class="bonus-stage-label">المرحلة <bdi dir="ltr">${b.currentStage}</bdi> من <bdi dir="ltr">${total}</bdi></div>
                 <div class="bonus-pip-row">${buildBonusPips(b.currentStage, b.stages, color)}</div>
                 <div class="bonus-controls">
@@ -892,7 +902,7 @@ function renderReadonlyBonuses() {
             const canDown = b.currentStage > 0;
             return `<div class="bonus-ro-item ${isMaxed ? 'bonus-maxed' : ''}" style="--bonus-color:${color};--bonus-glow:${glow}px;">
                 <button type="button" class="bonus-ro-tap" data-id="${b.id}" ${b.currentStage>=total?'disabled':''} aria-label="رقّي ${escapeHtml(b.name)} مرحلة">
-                    <div class="bonus-ro-name" style="color:${color};">${escapeHtml(b.name)} ${isMaxed ? '🎉' : ''} ${b.affectsPoints ? `<span class="bonus-mult-badge" title="يأثر بنقاط اليوم، يتصفر كل يوم">⚡×${b.currentStage + 1}</span>` : ''}</div>
+                    <div class="bonus-ro-name" style="color:${color};">${escapeHtml(b.name)} ${isMaxed ? '🎉' : ''} ${b.affectsPoints ? `<span class="bonus-mult-badge" title="يأثر بنقاط اليوم، يتصفر كل يوم">⚡×${bonusStageMultiplier(b)}</span>` : ''}</div>
                     <div class="bonus-pip-row">${buildBonusPips(b.currentStage, b.stages, color)}</div>
                 </button>
                 ${canDown ? `<button type="button" class="bonus-ro-undo" data-id="${b.id}" title="تراجع مرحلة">↺</button>` : ''}
@@ -1109,7 +1119,7 @@ if (typeof module !== 'undefined' && module.exports) {
         computeState, buildDashboardHtml, RANKS, MONTH_RANKS,
         getWeekRank, getMonthRank, MAX_DAY, MAX_WEEK, MAX_MONTH,
         bonusColorForRatio, lerpColorHex, hexToRgb, buildBonusPips,
-        createBonus, levelUpBonus, levelDownBonus, deleteBonus, getActiveMultiplier,
+        createBonus, levelUpBonus, levelDownBonus, deleteBonus, getActiveMultiplier, bonusStageMultiplier,
         addStageToBonus, removeStageFromBonus, checkDailyBonusReset,
         applyRankOverrides, getCurrentRanks: () => currentRanks, getCurrentMonthRanks: () => currentMonthRanks,
         getAppData: () => appData,
